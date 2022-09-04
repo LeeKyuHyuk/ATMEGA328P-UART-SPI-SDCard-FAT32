@@ -2,7 +2,7 @@ CC = avr-gcc
 CFLAGS = -Wall -Os -mmcu=atmega328p
 OBJCOPY = avr-objcopy
 
-OBJ = main.o uart.o spi.o
+OBJ = main.o uart.o spi.o sd.o
 
 all: atmega328p-uart-spi-sdcard-fat32.hex
 

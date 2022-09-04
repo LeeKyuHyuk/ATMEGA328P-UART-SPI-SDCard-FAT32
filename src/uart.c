@@ -9,7 +9,6 @@ void uartInit(uint16_t ubrr)
 
     // UART 송신기와 수신기 활성화
     UCSR0B |= (1 << RXEN0) | (1 << TXEN0);
-    uartPuts("\n\r");
     uartPuts("[INFO] UART initialized!\n\r");
 }
 
