@@ -18,6 +18,13 @@
 #define ACMD41_ARG 0x40000000
 #define ACMD41_CRC 0x00
 
+#define CMD17 17
+#define CMD17_CRC 0x00
+
+#define CMD24 24
+#define CMD24_ARG 0x00
+#define CMD24_CRC 0x00
+
 void sdPowerUpSeq();
 void sdCommand(uint8_t cmd, uint32_t arg, uint8_t crc);
 uint8_t sdReadRes1();
@@ -68,3 +75,21 @@ uint8_t sdSendOpCond();
 #define SD_ERROR 1
 
 uint8_t sdInit();
+
+#define SD_MAX_READ_ATTEMPTS 1563
+
+uint8_t sdReadSingleBlock(uint32_t addr, uint8_t *buf, uint8_t *token);
+
+#define SD_TOKEN_OOR(X) X & 0b00001000
+#define SD_TOKEN_CECC(X) X & 0b00000100
+#define SD_TOKEN_CC(X) X & 0b00000010
+#define SD_TOKEN_ERROR(X) X & 0b00000001
+
+void sdPrintDataErrToken(uint8_t token);
+
+#define SD_MAX_WRITE_ATTEMPTS 3907
+#define SD_BLOCK_LEN 512
+#define SD_START_TOKEN 0xFE
+#define SD_ERROR_TOKEN 0x00
+
+uint8_t sdWriteSingleBlock(uint32_t addr, uint8_t *buf, uint8_t *token);

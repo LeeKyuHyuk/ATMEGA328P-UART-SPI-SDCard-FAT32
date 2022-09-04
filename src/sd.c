@@ -344,3 +344,142 @@ uint8_t sdInit()
 
     return SD_SUCCESS;
 }
+
+/*
+  512바이트 단일 블록을 읽습니다
+  token = 0xFE // 읽기 성공
+  token = 0x0X // 데이터 에러
+  token = 0xFF // 타임아웃
+*/
+uint8_t sdReadSingleBlock(uint32_t addr, uint8_t *buf, uint8_t *token)
+{
+    uint8_t res1, read;
+    uint16_t readAttempts;
+
+    // Token을 초기화 합니다
+    *token = 0xFF;
+
+    // SDCard CS Assert
+    spiTransfer(0xFF);
+    CS_ENABLE();
+    spiTransfer(0xFF);
+
+    // CMD17 전송
+    sdCommand(CMD17, addr, CMD17_CRC);
+
+    // Response를 읽습니다
+    res1 = sdReadRes1();
+
+    // SDCard에서 Response를 받은 경우
+    if (res1 != 0xFF)
+    {
+        // Response Token을 기다립니다 (Timeout은 100ms 입니다)
+        readAttempts = 0;
+        while (++readAttempts != SD_MAX_READ_ATTEMPTS)
+            if ((read = spiTransfer(0xFF)) != 0xFF)
+                break;
+
+        // Response Token이 0xFE(시작 토큰)인 경우
+        if (read == 0xFE)
+        {
+            // 512바이트의 블록을 읽습니다
+            for (uint16_t i = 0; i < 512; i++)
+                *buf++ = spiTransfer(0xFF);
+
+            // 16비트의 CRC를 읽습니다
+            spiTransfer(0xFF);
+            spiTransfer(0xFF);
+        }
+
+        // Token을 SDCard의 Response로 설정합니다
+        *token = read;
+    }
+
+    // SDCard CS Deassert
+    spiTransfer(0xFF);
+    CS_DISABLE();
+    spiTransfer(0xFF);
+
+    return res1;
+}
+
+void sdPrintDataErrToken(uint8_t token)
+{
+    if (SD_TOKEN_OOR(token))
+        uartPuts("\tData out of range\r\n");
+    if (SD_TOKEN_CECC(token))
+        uartPuts("\tCard ECC failed\r\n");
+    if (SD_TOKEN_CC(token))
+        uartPuts("\tCC Error\r\n");
+    if (SD_TOKEN_ERROR(token))
+        uartPuts("\tError\r\n");
+}
+
+/*
+  512바이트 단일 블록을 기록합니다
+  token = 0x00 // Busy 타임아웃
+  token = 0x05 // 데이터 수락
+  token = 0xFF // 응답 타임아웃
+*/
+uint8_t sdWriteSingleBlock(uint32_t addr, uint8_t *buf, uint8_t *token)
+{
+    uint8_t res1;
+    uint8_t readAttempts, read;
+
+    // Token을 초기화 합니다
+    *token = 0xFF;
+
+    // SDCard CS Assert
+    spiTransfer(0xFF);
+    CS_ENABLE();
+    spiTransfer(0xFF);
+
+    // CMD24 전송
+    sdCommand(CMD24, addr, CMD24_CRC);
+
+    // Response를 읽습니다
+    res1 = sdReadRes1();
+
+    // Response에 오류가 없는 경우
+    if (res1 == SD_READY)
+    {
+        // Start Token을 전송합니다
+        spiTransfer(SD_START_TOKEN);
+
+        // Buffer의 내용을 전송합니다
+        for (uint16_t i = 0; i < SD_BLOCK_LEN; i++)
+            spiTransfer(buf[i]);
+
+        // Response를 기다립니다 (Timeout = 250ms)
+        readAttempts = 0;
+        while (++readAttempts != SD_MAX_WRITE_ATTEMPTS)
+            if ((read = spiTransfer(0xFF)) != 0xFF)
+            {
+                *token = 0xFF;
+                break;
+            }
+
+        // 데이터가 수락되면 실행합니다
+        if ((read & 0x1F) == 0x05)
+        {
+            // Token을 '데이터 수락'으로 설정
+            *token = 0x05;
+
+            // 쓰기 작업이 끝날때까지 기다립니다 (Timeout = 250ms)
+            readAttempts = 0;
+            while (spiTransfer(0xFF) == 0x00)
+                if (++readAttempts == SD_MAX_WRITE_ATTEMPTS)
+                {
+                    *token = 0x00;
+                    break;
+                }
+        }
+    }
+
+    // SDCard CS Deassert
+    spiTransfer(0xFF);
+    CS_DISABLE();
+    spiTransfer(0xFF);
+
+    return res1;
+}
